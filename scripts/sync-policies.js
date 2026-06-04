@@ -33,8 +33,18 @@ async function sync() {
     store = getStore("nihb-policies");
   }
 
+  // 1. Get existing blobs to identify files to prune
+  let blobsList = [];
+  try {
+    const { blobs } = await store.list();
+    blobsList = blobs || [];
+  } catch (err) {
+    console.log("Could not list existing blobs (might be empty or initial build):", err.message);
+  }
+
   console.log(`Syncing ${files.length} PDF policies to Netlify Blob store...`);
 
+  // 2. Upload local files
   for (const file of files) {
     const filePath = path.join(policiesDir, file);
     const key = file; // Filename acts as the unique blob key
@@ -43,6 +53,15 @@ async function sync() {
     const fileData = fs.readFileSync(filePath);
     await store.set(key, fileData);
     console.log(`Successfully uploaded '${file}'.`);
+  }
+
+  // 3. Prune keys in Netlify that were deleted locally
+  for (const b of blobsList) {
+    if (!files.includes(b.key)) {
+      console.log(`Blob key '${b.key}' was deleted locally. Deleting from Netlify Blobs...`);
+      await store.delete(b.key);
+      console.log(`Successfully deleted '${b.key}' from store.`);
+    }
   }
 
   console.log("Sync complete! All policy manuals stored successfully.");
