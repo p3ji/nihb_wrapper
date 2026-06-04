@@ -3,7 +3,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
-const pdf = require("pdf-parse");
+const pdfPkg = require("pdf-parse");
+const pdf = pdfPkg.default || pdfPkg;
 
 async function sync() {
   const policiesDir = path.join(process.cwd(), "policies");
