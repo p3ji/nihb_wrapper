@@ -1,7 +1,9 @@
 import { getStore } from "@netlify/blobs";
 import fs from "node:fs";
 import path from "node:path";
-import pdf from "pdf-parse";
+import { createRequire } from "node:module";
+const require = createRequire(import.meta.url);
+const pdf = require("pdf-parse");
 
 async function sync() {
   const policiesDir = path.join(process.cwd(), "policies");
