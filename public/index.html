@@ -442,9 +442,18 @@
       .examples-grid {
         grid-template-columns: 1fr;
       }
-      header h1 {
-        font-size: 2.25rem;
-      }
+    }
+
+    .app-footer {
+      text-align: center;
+      margin-top: 3rem;
+      margin-bottom: 2rem;
+      font-size: 0.8rem;
+      color: #64748b;
+      line-height: 1.6;
+      border-top: 1px solid rgba(255, 255, 255, 0.05);
+      padding-top: 1.5rem;
+      animation: fadeInUp 1s ease-out;
     }
   </style>
 </head>
@@ -476,7 +485,7 @@
         <label for="query-input">Ask a question regarding NIHB policies:</label>
         <textarea 
           id="query-input" 
-          placeholder="e.g., What are the vision care coverage criteria for eye examinations and frames? Propose the newest policy rules if there are updates." 
+          placeholder="e.g., What is the coverage policy for non-medicated emollients? Propose the newest rules if there are updates." 
           required
         ></textarea>
         
@@ -497,10 +506,10 @@
       <!-- Helper examples -->
       <div class="examples-header">Example Queries</div>
       <div class="examples-grid">
-        <button class="example-btn" onclick="applyExample(this)">What is the coverage rule for dental implant services?</button>
-        <button class="example-btn" onclick="applyExample(this)">What are the latest vision care reimbursement limits for frames?</button>
-        <button class="example-btn" onclick="applyExample(this)">Explain the policy on emergency mental health services under NIHB.</button>
-        <button class="example-btn" onclick="applyExample(this)">Is medical transportation covered for orthodontic appointments?</button>
+        <button class="example-btn" onclick="applyExample(this)">What is the coverage rule for non-medicated emollients?</button>
+        <button class="example-btn" onclick="applyExample(this)">Under what conditions is Nicotine Replacement Therapy covered?</button>
+        <button class="example-btn" onclick="applyExample(this)">What are the guidelines for coverage of acetaminophen and ibuprofen?</button>
+        <button class="example-btn" onclick="applyExample(this)">Explain the policy regarding medication shortages and extemporaneous mixtures.</button>
       </div>
     </div>
 
@@ -519,6 +528,11 @@
         <!-- Rendered Response Content -->
       </div>
     </div>
+
+    <!-- Disclaimer / Footer -->
+    <footer class="app-footer">
+      Disclaimer: This is an experimental, independent research project and is in no way affiliated with, authorized, or endorsed by the actual Non-Insured Health Benefits (NIHB) program or the Government of Canada.
+    </footer>
 
   </div>
 
