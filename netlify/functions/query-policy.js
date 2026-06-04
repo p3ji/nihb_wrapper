@@ -93,9 +93,9 @@ export default async (req, context) => {
     console.log(`Loaded vector index containing ${vectorIndex.length} chunks.`);
 
     // 6. Generate embedding vector for the user's query
-    console.log("Generating query embedding using gemini-embedding-2...");
+    console.log("Generating query embedding using gemini-embedding-001...");
     const embedResponse = await ai.models.embedContent({
-      model: "gemini-embedding-2",
+      model: "gemini-embedding-001",
       contents: question,
       config: {
         outputDimensionality: 768

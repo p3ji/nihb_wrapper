@@ -5,8 +5,8 @@ import pdf from "@cedrugs/pdf-parse";
 import { GoogleGenAI } from "@google/genai";
 
 // Text chunking parameters
-const CHUNK_SIZE = 800;
-const CHUNK_OVERLAP = 150;
+const CHUNK_SIZE = 3000;
+const CHUNK_OVERLAP = 500;
 const BATCH_SIZE = 50;
 
 // Helper to chunk text
@@ -33,7 +33,7 @@ async function embedWithRetry(ai, contents, retries = 5, initialDelay = 3000) {
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
       const response = await ai.models.embedContent({
-        model: "gemini-embedding-2",
+        model: "gemini-embedding-001",
         contents: contents,
         config: {
           outputDimensionality: 768
