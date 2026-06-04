@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@google/genai": "^2.8.0",
-    "@netlify/blobs": "^10.7.9"
+    "@netlify/blobs": "^10.7.9",
+    "pdf-parse": "^2.4.5"
   }
 }

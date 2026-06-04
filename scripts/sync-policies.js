@@ -1,6 +1,7 @@
 import { getStore } from "@netlify/blobs";
 import fs from "node:fs";
 import path from "node:path";
+import pdf from "pdf-parse";
 
 async function sync() {
   const policiesDir = path.join(process.cwd(), "policies");
@@ -42,38 +43,51 @@ async function sync() {
     console.log("Could not list existing blobs (might be empty or initial build):", err.message);
   }
 
-  console.log(`Syncing ${files.length} PDF policies to Netlify Blob store...`);
+  console.log(`Syncing ${files.length} PDF policies as plain text to Netlify Blob store...`);
 
-  // 2. Upload local files
+  // 2. Extract text and upload local files
   for (const file of files) {
     const filePath = path.join(policiesDir, file);
-    const key = file; // Filename acts as the unique blob key
+    const key = file.replace(/\.pdf$/i, ".txt"); // Store as text key
 
-    console.log(`Uploading '${file}' as blob key '${key}'...`);
+    console.log(`Extracting text from '${file}'...`);
     const fileData = fs.readFileSync(filePath);
-    await store.set(key, fileData);
-    console.log(`Successfully uploaded '${file}'.`);
+    
+    let text = "";
+    try {
+      const data = await pdf(fileData);
+      text = data.text || "";
+    } catch (err) {
+      console.error(`Error parsing PDF '${file}':`, err);
+      throw err;
+    }
+
+    console.log(`Uploading extracted text (${text.length} characters) as blob key '${key}'...`);
+    await store.set(key, text);
+    console.log(`Successfully uploaded text for '${file}'.`);
   }
 
   // 3. Prune keys in Netlify that were deleted locally
   for (const b of blobsList) {
-    if (!files.includes(b.key)) {
-      console.log(`Blob key '${b.key}' was deleted locally. Deleting from Netlify Blobs...`);
+    // If it's a txt file, check if corresponding pdf exists locally
+    if (b.key.endsWith(".txt")) {
+      const matchingPdfName = b.key.replace(/\.txt$/i, ".pdf");
+      if (!files.includes(matchingPdfName)) {
+        console.log(`Blob key '${b.key}' was deleted locally. Deleting from Netlify Blobs...`);
+        await store.delete(b.key);
+        console.log(`Successfully deleted '${b.key}' from store.`);
+      }
+    } else {
+      // Prune legacy binary PDFs or cache metadata keys to keep the store clean
+      console.log(`Pruning legacy/metadata blob key '${b.key}' from store...`);
       await store.delete(b.key);
-      console.log(`Successfully deleted '${b.key}' from store.`);
     }
   }
 
-  console.log("Sync complete! All policy manuals stored successfully.");
+  console.log("Sync complete! All policy manuals stored successfully as plain text.");
 }
 
 sync().catch(err => {
   console.error("Error during synchronization process:", err);
   process.exit(1);
 });
-// Trigger directory creation during initial script write
-const policiesDir = path.join(process.cwd(), "policies");
-if (!fs.existsSync(policiesDir)) {
-  fs.mkdirSync(policiesDir, { recursive: true });
-  fs.writeFileSync(path.join(policiesDir, ".gitkeep"), "");
-}
