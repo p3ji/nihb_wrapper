@@ -112,6 +112,29 @@ export default async (req, context) => {
 
   } catch (err) {
     console.error("Error in query-policy handler:", err);
+
+    // Detect Gemini API Rate Limit / Quota Exceeded errors
+    const isRateLimit = err.status === 429 || 
+                        err.message?.toLowerCase().includes("429") || 
+                        err.message?.toLowerCase().includes("quota") || 
+                        err.message?.toLowerCase().includes("rate_limit") ||
+                        err.message?.toLowerCase().includes("resource_exhausted");
+
+    if (isRateLimit) {
+      return new Response(
+        JSON.stringify({
+          error: "Gemini Free Tier Rate Limit Exceeded (250,000 input tokens/minute). Please wait 15 seconds and try again."
+        }),
+        {
+          status: 429,
+          headers: {
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": "*"
+          }
+        }
+      );
+    }
+
     return new Response(
       JSON.stringify({ error: "Internal Server Error", message: err.message }),
       {
