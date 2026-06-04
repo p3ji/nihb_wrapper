@@ -2,13 +2,38 @@ import { getStore } from "@netlify/blobs";
 import fs from "node:fs";
 import path from "node:path";
 import pdf from "@cedrugs/pdf-parse";
+import { GoogleGenAI } from "@google/genai";
+
+// Text chunking parameters
+const CHUNK_SIZE = 800;
+const CHUNK_OVERLAP = 150;
+const BATCH_SIZE = 50;
+
+// Helper to chunk text
+function chunkText(text, filename) {
+  // Clean up formatting: compress multiple spaces/newlines
+  const cleanText = text.replace(/\s+/g, ' ').trim();
+  const chunks = [];
+  let start = 0;
+  
+  while (start < cleanText.length) {
+    const end = Math.min(start + CHUNK_SIZE, cleanText.length);
+    const chunk = cleanText.substring(start, end);
+    chunks.push({
+      text: chunk,
+      source: filename,
+      index: chunks.length
+    });
+    start += (CHUNK_SIZE - CHUNK_OVERLAP);
+  }
+  return chunks;
+}
 
 async function sync() {
   const policiesDir = path.join(process.cwd(), "policies");
   if (!fs.existsSync(policiesDir)) {
     console.log("Creating policies/ directory...");
     fs.mkdirSync(policiesDir, { recursive: true });
-    // Write a .gitkeep to track the empty folder in Git
     fs.writeFileSync(path.join(policiesDir, ".gitkeep"), "");
   }
 
@@ -18,17 +43,19 @@ async function sync() {
     return;
   }
 
-  // Retrieve environment variables for CI authentication
+  // Retrieve environment variables for Netlify and Gemini
   const siteID = process.env.NETLIFY_SITE_ID || process.env.SITE_ID;
   const token = process.env.NETLIFY_API_TOKEN;
+  const apiKey = process.env.GEMINI_API_KEY;
+
+  if (!apiKey) {
+    throw new Error("GEMINI_API_KEY environment variable is required to generate embeddings during build.");
+  }
 
   let store;
   if (siteID && token) {
     console.log("Initializing Netlify Blobs store 'nihb-policies' in CI/Build mode with credentials...");
-    store = getStore("nihb-policies", {
-      siteID,
-      token
-    });
+    store = getStore("nihb-policies", { siteID, token });
   } else {
     console.log("Initializing Netlify Blobs store 'nihb-policies' (using local/auto environment context)...");
     store = getStore("nihb-policies");
@@ -40,51 +67,78 @@ async function sync() {
     const { blobs } = await store.list();
     blobsList = blobs || [];
   } catch (err) {
-    console.log("Could not list existing blobs (might be empty or initial build):", err.message);
+    console.log("Could not list existing blobs:", err.message);
   }
 
-  console.log(`Syncing ${files.length} PDF policies as plain text to Netlify Blob store...`);
-
-  // 2. Extract text and upload local files
+  console.log(`Step 1: Extracting text from ${files.length} PDFs...`);
+  const allChunks = [];
   for (const file of files) {
     const filePath = path.join(policiesDir, file);
-    const key = file.replace(/\.pdf$/i, ".txt"); // Store as text key
-
-    console.log(`Extracting text from '${file}'...`);
+    console.log(`Parsing '${file}'...`);
     const fileData = fs.readFileSync(filePath);
     
-    let text = "";
+    let parsedText = "";
     try {
       const data = await pdf(fileData);
-      text = data.text || "";
+      parsedText = data.text || "";
     } catch (err) {
       console.error(`Error parsing PDF '${file}':`, err);
       throw err;
     }
 
-    console.log(`Uploading extracted text (${text.length} characters) as blob key '${key}'...`);
-    await store.set(key, text);
-    console.log(`Successfully uploaded text for '${file}'.`);
+    const chunks = chunkText(parsedText, file);
+    console.log(`Generated ${chunks.length} text chunks for '${file}'.`);
+    allChunks.push(...chunks);
   }
 
-  // 3. Prune keys in Netlify that were deleted locally
-  for (const b of blobsList) {
-    // If it's a txt file, check if corresponding pdf exists locally
-    if (b.key.endsWith(".txt")) {
-      const matchingPdfName = b.key.replace(/\.txt$/i, ".pdf");
-      if (!files.includes(matchingPdfName)) {
-        console.log(`Blob key '${b.key}' was deleted locally. Deleting from Netlify Blobs...`);
-        await store.delete(b.key);
-        console.log(`Successfully deleted '${b.key}' from store.`);
+  console.log(`Step 2: Total chunks generated: ${allChunks.length}. Generating embeddings in batches of ${BATCH_SIZE}...`);
+  const ai = new GoogleGenAI({ apiKey });
+  const embeddedChunks = [];
+
+  for (let i = 0; i < allChunks.length; i += BATCH_SIZE) {
+    const batch = allChunks.slice(i, i + BATCH_SIZE);
+    const batchNum = Math.floor(i / BATCH_SIZE) + 1;
+    const totalBatches = Math.ceil(allChunks.length / BATCH_SIZE);
+    
+    console.log(`Processing embedding batch ${batchNum}/${totalBatches} (${batch.length} chunks)...`);
+    
+    try {
+      const response = await ai.models.embedContent({
+        model: "text-embedding-004",
+        contents: batch.map(c => c.text)
+      });
+
+      const embeddings = response.embeddings || [];
+      for (let j = 0; j < batch.length; j++) {
+        const vector = embeddings[j]?.values || [];
+        embeddedChunks.push({
+          text: batch[j].text,
+          source: batch[j].source,
+          index: batch[j].index,
+          vector: vector
+        });
       }
-    } else {
-      // Prune legacy binary PDFs or cache metadata keys to keep the store clean
-      console.log(`Pruning legacy/metadata blob key '${b.key}' from store...`);
+    } catch (err) {
+      console.error(`Failed to generate embeddings for batch ${batchNum}:`, err);
+      throw err;
+    }
+  }
+
+  // 3. Save the entire pre-computed vector index in Netlify Blobs
+  const indexKey = "vector_index.json";
+  console.log(`Step 3: Uploading pre-indexed vectors to Blobs under key '${indexKey}'...`);
+  await store.set(indexKey, JSON.stringify(embeddedChunks));
+  console.log("Vector index successfully uploaded.");
+
+  // 4. Prune any old files, legacy text files, or cached files to keep storage clean
+  for (const b of blobsList) {
+    if (b.key !== indexKey) {
+      console.log(`Pruning old/unused key '${b.key}' from store...`);
       await store.delete(b.key);
     }
   }
 
-  console.log("Sync complete! All policy manuals stored successfully as plain text.");
+  console.log("Sync complete! RAG vector index compiled and deployed successfully.");
 }
 
 sync().catch(err => {
