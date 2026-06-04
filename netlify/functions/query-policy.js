@@ -93,10 +93,13 @@ export default async (req, context) => {
     console.log(`Loaded vector index containing ${vectorIndex.length} chunks.`);
 
     // 6. Generate embedding vector for the user's query
-    console.log("Generating query embedding using text-embedding-004...");
+    console.log("Generating query embedding using gemini-embedding-2...");
     const embedResponse = await ai.models.embedContent({
-      model: "text-embedding-004",
-      contents: question
+      model: "gemini-embedding-2",
+      contents: question,
+      config: {
+        outputDimensionality: 768
+      }
     });
 
     const questionVector = embedResponse.embeddings?.[0]?.values || embedResponse.embedding?.values;

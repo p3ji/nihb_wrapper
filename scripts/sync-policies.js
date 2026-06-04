@@ -104,8 +104,11 @@ async function sync() {
     
     try {
       const response = await ai.models.embedContent({
-        model: "text-embedding-004",
-        contents: batch.map(c => c.text)
+        model: "gemini-embedding-2",
+        contents: batch.map(c => c.text),
+        config: {
+          outputDimensionality: 768
+        }
       });
 
       const embeddings = response.embeddings || [];
