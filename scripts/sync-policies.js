@@ -29,6 +29,34 @@ function chunkText(text, filename) {
   return chunks;
 }
 
+async function embedWithRetry(ai, contents, retries = 5, initialDelay = 3000) {
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      const response = await ai.models.embedContent({
+        model: "gemini-embedding-2",
+        contents: contents,
+        config: {
+          outputDimensionality: 768
+        }
+      });
+      return response;
+    } catch (err) {
+      const isRateLimit = err.status === 429 || 
+                          (err.message && err.message.includes("429")) || 
+                          (err.message && err.message.toLowerCase().includes("quota")) ||
+                          (err.message && err.message.toLowerCase().includes("limit"));
+      
+      if (isRateLimit && attempt < retries) {
+        const delay = initialDelay * Math.pow(2, attempt - 1);
+        console.log(`[Rate Limit 429] Retrying batch in ${delay / 1000}s (Attempt ${attempt}/${retries})...`);
+        await new Promise(res => setTimeout(res, delay));
+      } else {
+        throw err;
+      }
+    }
+  }
+}
+
 async function sync() {
   const policiesDir = path.join(process.cwd(), "policies");
   if (!fs.existsSync(policiesDir)) {
@@ -61,7 +89,7 @@ async function sync() {
     store = getStore("nihb-policies");
   }
 
-  // 1. Get existing blobs to identify files to prune
+  // 1. Get existing blobs to identify files to prune and try loading current index
   let blobsList = [];
   try {
     const { blobs } = await store.list();
@@ -70,11 +98,35 @@ async function sync() {
     console.log("Could not list existing blobs:", err.message);
   }
 
-  console.log(`Step 1: Extracting text from ${files.length} PDFs...`);
+  const indexKey = "vector_index.json";
+  let existingIndex = [];
+  try {
+    const rawIndex = await store.get(indexKey, { type: "text" });
+    if (rawIndex) {
+      existingIndex = JSON.parse(rawIndex);
+      console.log(`Loaded existing index containing ${existingIndex.length} chunks.`);
+    }
+  } catch (err) {
+    console.log("No existing index found or failed to read it:", err.message);
+  }
+
+  console.log(`Step 1: Extracting text and checking cache for ${files.length} PDFs...`);
   const allChunks = [];
+  const embeddedChunks = [];
+
   for (const file of files) {
     const filePath = path.join(policiesDir, file);
-    console.log(`Parsing '${file}'...`);
+    const stats = fs.statSync(filePath);
+    const currentSize = stats.size;
+
+    const cachedChunks = existingIndex.filter(c => c.source === file);
+    if (cachedChunks.length > 0 && cachedChunks[0].fileSize === currentSize) {
+      console.log(`Cache HIT for '${file}' (${currentSize} bytes). Reusing ${cachedChunks.length} existing embeddings.`);
+      embeddedChunks.push(...cachedChunks);
+      continue;
+    }
+
+    console.log(`Cache MISS for '${file}'. Parsing PDF...`);
     const fileData = fs.readFileSync(filePath);
     
     let parsedText = "";
@@ -87,51 +139,56 @@ async function sync() {
     }
 
     const chunks = chunkText(parsedText, file);
+    chunks.forEach(c => c.fileSize = currentSize);
     console.log(`Generated ${chunks.length} text chunks for '${file}'.`);
     allChunks.push(...chunks);
   }
 
-  console.log(`Step 2: Total chunks generated: ${allChunks.length}. Generating embeddings in batches of ${BATCH_SIZE}...`);
-  const ai = new GoogleGenAI({ apiKey });
-  const embeddedChunks = [];
+  const sleep = ms => new Promise(res => setTimeout(res, ms));
 
-  for (let i = 0; i < allChunks.length; i += BATCH_SIZE) {
-    const batch = allChunks.slice(i, i + BATCH_SIZE);
-    const batchNum = Math.floor(i / BATCH_SIZE) + 1;
-    const totalBatches = Math.ceil(allChunks.length / BATCH_SIZE);
-    
-    console.log(`Processing embedding batch ${batchNum}/${totalBatches} (${batch.length} chunks)...`);
-    
-    try {
-      const response = await ai.models.embedContent({
-        model: "gemini-embedding-2",
-        contents: batch.map(c => c.text),
-        config: {
-          outputDimensionality: 768
-        }
-      });
+  if (allChunks.length > 0) {
+    console.log(`Step 2: Total new/modified chunks generated: ${allChunks.length}. Generating embeddings in batches of ${BATCH_SIZE}...`);
+    const ai = new GoogleGenAI({ apiKey });
 
-      const embeddings = response.embeddings || [];
-      for (let j = 0; j < batch.length; j++) {
-        const vector = embeddings[j]?.values || [];
-        embeddedChunks.push({
-          text: batch[j].text,
-          source: batch[j].source,
-          index: batch[j].index,
-          vector: vector
-        });
+    for (let i = 0; i < allChunks.length; i += BATCH_SIZE) {
+      const batch = allChunks.slice(i, i + BATCH_SIZE);
+      const batchNum = Math.floor(i / BATCH_SIZE) + 1;
+      const totalBatches = Math.ceil(allChunks.length / BATCH_SIZE);
+      
+      if (i > 0) {
+        console.log("Sleeping for 4.5 seconds to respect rate limits...");
+        await sleep(4500);
       }
-    } catch (err) {
-      console.error(`Failed to generate embeddings for batch ${batchNum}:`, err);
-      throw err;
+      
+      console.log(`Processing embedding batch ${batchNum}/${totalBatches} (${batch.length} chunks)...`);
+      
+      try {
+        const response = await embedWithRetry(ai, batch.map(c => c.text));
+
+        const embeddings = response.embeddings || [];
+        for (let j = 0; j < batch.length; j++) {
+          const vector = embeddings[j]?.values || [];
+          embeddedChunks.push({
+            text: batch[j].text,
+            source: batch[j].source,
+            index: batch[j].index,
+            fileSize: batch[j].fileSize,
+            vector: vector
+          });
+        }
+      } catch (err) {
+        console.error(`Failed to generate embeddings for batch ${batchNum}:`, err);
+        throw err;
+      }
     }
+  } else {
+    console.log("Step 2: No new or modified chunks to embed. Cache is fully up to date.");
   }
 
   // 3. Save the entire pre-computed vector index in Netlify Blobs
-  const indexKey = "vector_index.json";
   console.log(`Step 3: Uploading pre-indexed vectors to Blobs under key '${indexKey}'...`);
   await store.set(indexKey, JSON.stringify(embeddedChunks));
-  console.log("Vector index successfully uploaded.");
+  console.log(`Vector index successfully uploaded (${embeddedChunks.length} total chunks).`);
 
   // 4. Prune any old files, legacy text files, or cached files to keep storage clean
   for (const b of blobsList) {
