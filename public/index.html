@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NIHB Policy Assistant</title>
+  
+  <!-- Modern Typography -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  
+  <!-- Markdown Parsing Support -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+  <style>
+    /* Reset and Core Theme */
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Outfit', sans-serif;
+    }
+
+    body {
+      background: radial-gradient(circle at 50% 0%, #1a1a2e 0%, #0d0d15 100%);
+      color: #e2e8f0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      padding: 2rem 1rem;
+      overflow-y: auto;
+    }
+
+    /* Outer Wrapper */
+    .app-container {
+      width: 100%;
+      max-width: 800px;
+      margin-top: 1.5rem;
+    }
+
+    /* Premium Header */
+    header {
+      text-align: center;
+      margin-bottom: 2.5rem;
+      animation: fadeInDown 0.8s ease-out;
+    }
+
+    header h1 {
+      font-size: 2.75rem;
+      font-weight: 700;
+      background: linear-gradient(135deg, #a78bfa 0%, #3b82f6 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 0.5rem;
+      letter-spacing: -0.025em;
+    }
+
+    header p {
+      color: #94a3b8;
+      font-size: 1.1rem;
+      font-weight: 300;
+      max-width: 600px;
+      margin: 0 auto;
+      line-height: 1.5;
+    }
+
+    /* Store Connection Badge */
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: rgba(16, 185, 129, 0.1);
+      border: 1px solid rgba(16, 185, 129, 0.2);
+      color: #34d399;
+      font-size: 0.8rem;
+      font-weight: 500;
+      padding: 0.35rem 0.75rem;
+      border-radius: 50px;
+      margin-top: 1rem;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+
+    .status-pulse {
+      width: 8px;
+      height: 8px;
+      background-color: #10b981;
+      border-radius: 50%;
+      box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+      animation: pulse 1.6s infinite;
+    }
+
+    /* Glassmorphic Search Card */
+    .search-card {
+      background: rgba(30, 41, 59, 0.45);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 20px;
+      padding: 2rem;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+      margin-bottom: 2rem;
+      position: relative;
+      overflow: hidden;
+      animation: fadeInUp 0.8s ease-out;
+    }
+
+    .search-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, #6366f1, #3b82f6, #a78bfa);
+    }
+
+    label {
+      display: block;
+      font-size: 0.95rem;
+      font-weight: 500;
+      color: #cbd5e1;
+      margin-bottom: 0.75rem;
+    }
+
+    textarea {
+      width: 100%;
+      height: 120px;
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      padding: 1rem;
+      color: #f8fafc;
+      font-size: 1rem;
+      resize: vertical;
+      outline: none;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      line-height: 1.5;
+    }
+
+    textarea:focus {
+      border-color: #6366f1;
+      box-shadow: 0 0 15px rgba(99, 102, 241, 0.25);
+      background: rgba(15, 23, 42, 0.8);
+    }
+
+    /* Submit Button & Animations */
+    .btn-submit {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.75rem;
+      width: 100%;
+      background: linear-gradient(135deg, #6366f1 0%, #3b82f6 100%);
+      color: #ffffff;
+      border: none;
+      border-radius: 12px;
+      padding: 1rem;
+      font-size: 1.1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+      margin-top: 1.25rem;
+    }
+
+    .btn-submit:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(59, 130, 246, 0.45);
+      background: linear-gradient(135deg, #4f46e5 0%, #2563eb 100%);
+    }
+
+    .btn-submit:active:not(:disabled) {
+      transform: translateY(0);
+    }
+
+    .btn-submit:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    /* Micro-Animations & Spinners */
+    .spinner {
+      width: 22px;
+      height: 22px;
+      border: 3px solid rgba(255, 255, 255, 0.3);
+      border-top-color: #ffffff;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      display: none;
+    }
+
+    /* Loading and Progress Container */
+    .loading-container {
+      display: none;
+      flex-direction: column;
+      gap: 0.75rem;
+      margin-top: 1.5rem;
+      text-align: center;
+    }
+
+    .progress-bar-bg {
+      width: 100%;
+      height: 4px;
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 10px;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .progress-bar-fill {
+      position: absolute;
+      left: 0;
+      top: 0;
+      height: 100%;
+      width: 30%;
+      background: linear-gradient(90deg, #6366f1, #a78bfa);
+      border-radius: 10px;
+      animation: shift 1.8s infinite linear;
+    }
+
+    .loading-text {
+      font-size: 0.9rem;
+      color: #94a3b8;
+      font-weight: 300;
+    }
+
+    /* Examples Panel */
+    .examples-header {
+      margin-top: 1rem;
+      font-size: 0.85rem;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .examples-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.75rem;
+      margin-top: 0.5rem;
+    }
+
+    .example-btn {
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      border-radius: 10px;
+      padding: 0.75rem;
+      font-size: 0.85rem;
+      color: #94a3b8;
+      text-align: left;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .example-btn:hover {
+      background: rgba(255, 255, 255, 0.06);
+      border-color: rgba(255, 255, 255, 0.12);
+      color: #f1f5f9;
+    }
+
+    /* Premium Results Panel */
+    .results-card {
+      display: none;
+      background: rgba(15, 23, 42, 0.75);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 20px;
+      padding: 2rem;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+      margin-bottom: 3rem;
+      animation: fadeInUp 0.6s ease-out;
+    }
+
+    .results-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      padding-bottom: 0.75rem;
+      margin-bottom: 1.25rem;
+    }
+
+    .results-title {
+      font-size: 1.2rem;
+      font-weight: 600;
+      color: #a78bfa;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .results-meta {
+      font-size: 0.8rem;
+      color: #64748b;
+    }
+
+    /* Markdown styling inside results */
+    .response-content {
+      line-height: 1.7;
+      font-size: 1.05rem;
+      color: #e2e8f0;
+      font-weight: 300;
+    }
+
+    .response-content h2,
+    .response-content h3 {
+      font-weight: 600;
+      color: #ffffff;
+      margin: 1.5rem 0 0.5rem 0;
+    }
+
+    .response-content h2 { font-size: 1.35rem; }
+    .response-content h3 { font-size: 1.15rem; }
+
+    .response-content p {
+      margin-bottom: 1rem;
+    }
+
+    .response-content ul,
+    .response-content ol {
+      margin-left: 1.5rem;
+      margin-bottom: 1rem;
+    }
+
+    .response-content li {
+      margin-bottom: 0.35rem;
+    }
+
+    .response-content table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1.5rem 0;
+      font-size: 0.95rem;
+    }
+
+    .response-content th,
+    .response-content td {
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      padding: 0.75rem;
+      text-align: left;
+    }
+
+    .response-content th {
+      background: rgba(255, 255, 255, 0.05);
+      color: #ffffff;
+      font-weight: 600;
+    }
+
+    .response-content tr:nth-child(even) {
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .response-content blockquote {
+      border-left: 3px solid #6366f1;
+      padding-left: 1rem;
+      margin: 1rem 0;
+      color: #94a3b8;
+      font-style: italic;
+    }
+
+    .response-content code {
+      background: rgba(255, 255, 255, 0.08);
+      padding: 0.15rem 0.35rem;
+      border-radius: 4px;
+      font-size: 0.9em;
+      font-family: monospace;
+    }
+
+    /* Error Message Panel */
+    .error-card {
+      display: none;
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid rgba(239, 68, 68, 0.25);
+      color: #fca5a5;
+      padding: 1rem;
+      border-radius: 12px;
+      font-size: 0.95rem;
+      margin-bottom: 1.5rem;
+      align-items: center;
+      gap: 0.75rem;
+      animation: shake 0.4s ease;
+    }
+
+    /* Keyframes */
+    @keyframes spin {
+      100% { transform: rotate(360deg); }
+    }
+
+    @keyframes pulse {
+      0% {
+        transform: scale(0.95);
+        box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4);
+      }
+      70% {
+        transform: scale(1);
+        box-shadow: 0 0 0 10px rgba(16, 185, 129, 0);
+      }
+      100% {
+        transform: scale(0.95);
+        box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+      }
+    }
+
+    @keyframes shift {
+      0% { left: -30%; width: 30%; }
+      50% { left: 20%; width: 60%; }
+      100% { left: 100%; width: 30%; }
+    }
+
+    @keyframes fadeInUp {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @keyframes fadeInDown {
+      from {
+        opacity: 0;
+        transform: translateY(-20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      25% { transform: translateX(-6px); }
+      75% { transform: translateX(6px); }
+    }
+
+    @media (max-width: 640px) {
+      .examples-grid {
+        grid-template-columns: 1fr;
+      }
+      header h1 {
+        font-size: 2.25rem;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="app-container">
+    
+    <!-- Header -->
+    <header>
+      <h1>NIHB Policy Assistant</h1>
+      <p>Secure query engine analyzing master manuals and monthly updates in real time to provide verified policy answers.</p>
+      <div class="status-badge">
+        <div class="status-pulse"></div>
+        <span>Store: nihb-policies</span>
+      </div>
+    </header>
+
+    <!-- Error container -->
+    <div id="error-box" class="error-card">
+      <svg style="width: 20px; height: 20px; flex-shrink: 0;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+      </svg>
+      <span id="error-message">An error occurred while fetching policy details.</span>
+    </div>
+
+    <!-- Search box card -->
+    <div class="search-card">
+      <form id="query-form">
+        <label for="query-input">Ask a question regarding NIHB policies:</label>
+        <textarea 
+          id="query-input" 
+          placeholder="e.g., What are the vision care coverage criteria for eye examinations and frames? Propose the newest policy rules if there are updates." 
+          required
+        ></textarea>
+        
+        <button type="submit" id="submit-btn" class="btn-submit">
+          <div id="btn-spinner" class="spinner"></div>
+          <span id="btn-text">Submit Query</span>
+        </button>
+      </form>
+
+      <!-- Skeleton Loading Progress -->
+      <div id="loader" class="loading-container">
+        <div class="progress-bar-bg">
+          <div class="progress-bar-fill"></div>
+        </div>
+        <div class="loading-text">Fetching manuals, extracting text, and generating context-aware answers...</div>
+      </div>
+
+      <!-- Helper examples -->
+      <div class="examples-header">Example Queries</div>
+      <div class="examples-grid">
+        <button class="example-btn" onclick="applyExample(this)">What is the coverage rule for dental implant services?</button>
+        <button class="example-btn" onclick="applyExample(this)">What are the latest vision care reimbursement limits for frames?</button>
+        <button class="example-btn" onclick="applyExample(this)">Explain the policy on emergency mental health services under NIHB.</button>
+        <button class="example-btn" onclick="applyExample(this)">Is medical transportation covered for orthodontic appointments?</button>
+      </div>
+    </div>
+
+    <!-- Results Display -->
+    <div id="results-card" class="results-card">
+      <div class="results-header">
+        <div class="results-title">
+          <svg style="width: 20px; height: 20px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+          </svg>
+          Policy Verification Complete
+        </div>
+        <div class="results-meta">Source: Multi-PDF Context Engine</div>
+      </div>
+      <div id="response-content" class="response-content">
+        <!-- Rendered Response Content -->
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    const form = document.getElementById('query-form');
+    const queryInput = document.getElementById('query-input');
+    const submitBtn = document.getElementById('submit-btn');
+    const btnText = document.getElementById('btn-text');
+    const btnSpinner = document.getElementById('btn-spinner');
+    const loader = document.getElementById('loader');
+    const errorBox = document.getElementById('error-box');
+    const errorMessage = document.getElementById('error-message');
+    const resultsCard = document.getElementById('results-card');
+    const responseContent = document.getElementById('response-content');
+
+    // Load example question into input box
+    function applyExample(button) {
+      queryInput.value = button.innerText;
+      queryInput.focus();
+    }
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const question = queryInput.value.trim();
+      if (!question) return;
+
+      // Reset State
+      errorBox.style.display = 'none';
+      resultsCard.style.display = 'none';
+      submitBtn.disabled = true;
+      btnSpinner.style.display = 'block';
+      btnText.innerText = 'Processing...';
+      loader.style.display = 'flex';
+
+      try {
+        const response = await fetch('/.netlify/functions/query-policy', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ question }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || 'Server returned an error response.');
+        }
+
+        // Render Markdown content securely
+        responseContent.innerHTML = marked.parse(data.answer);
+        resultsCard.style.display = 'block';
+        
+        // Smooth scroll to results
+        resultsCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+      } catch (err) {
+        console.error(err);
+        errorMessage.innerText = err.message || 'An unexpected connection error occurred.';
+        errorBox.style.display = 'flex';
+      } finally {
+        // Reset interactive elements
+        submitBtn.disabled = false;
+        btnSpinner.style.display = 'none';
+        btnText.innerText = 'Submit Query';
+        loader.style.display = 'none';
+      }
+    });
+  </script>
+
+</body>
+</html>

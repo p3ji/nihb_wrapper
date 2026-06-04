@@ -1,0 +1,15 @@
+{
+  "name": "nihb-policy-wrapper",
+  "version": "1.0.0",
+  "description": "Secure serverless query wrapper for NIHB policy manuals using Netlify Blobs and Gemini",
+  "type": "module",
+  "main": "netlify/functions/query-policy.js",
+  "scripts": {
+    "build": "node scripts/sync-policies.js",
+    "dev": "netlify dev"
+  },
+  "dependencies": {
+    "@google/genai": "^2.8.0",
+    "@netlify/blobs": "^10.7.9"
+  }
+}
