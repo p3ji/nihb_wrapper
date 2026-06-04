@@ -24,8 +24,7 @@ async function sync() {
   let store;
   if (siteID && token) {
     console.log("Initializing Netlify Blobs store 'nihb-policies' in CI/Build mode with credentials...");
-    store = getStore({
-      name: "nihb-policies",
+    store = getStore("nihb-policies", {
       siteID,
       token
     });
