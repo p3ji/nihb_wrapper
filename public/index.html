@@ -67,6 +67,25 @@
       line-height: 1.5;
     }
 
+    .sources-note {
+      color: #64748b;
+      font-size: 0.9rem;
+      font-weight: 300;
+      margin-top: 0.5rem;
+      line-height: 1.5;
+    }
+
+    .sources-note a {
+      color: #60a5fa;
+      text-decoration: none;
+      transition: color 0.2s ease;
+    }
+
+    .sources-note a:hover {
+      color: #93c5fd;
+      text-decoration: underline;
+    }
+
     /* Store Connection Badge */
     .status-badge {
       display: inline-flex;
@@ -464,7 +483,12 @@
     <!-- Header -->
     <header>
       <h1>NIHB Policy Assistant</h1>
-      <p>Secure query engine analyzing master manuals and monthly updates in real time to provide verified policy answers.</p>
+      <p>Experimental query engine to provide grounded responses from relevant policy documents.</p>
+      <p class="sources-note">
+        Current sources of information: NIHB 
+        <a href="https://nihb-ssna.express-scripts.ca/en/0205140506092019/16/160219" target="_blank" rel="noopener noreferrer">newsletters</a> and 
+        <a href="https://nihb-ssna.express-scripts.ca/en/0205140506092019/16/1614" target="_blank" rel="noopener noreferrer">bulletins</a>.
+      </p>
       <div class="status-badge">
         <div class="status-pulse"></div>
         <span>Store: nihb-policies</span>
