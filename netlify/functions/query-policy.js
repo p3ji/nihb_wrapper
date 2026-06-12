@@ -52,9 +52,6 @@ export default async (req, context) => {
 
     // 3. Initialize Google Gen AI client
     let apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey || apiKey.startsWith("eyJ")) {
-      apiKey = "AIzaSyD3-OWI8TGEwPfSY3D9JNFayQhewc27bfw";
-    }
     console.log("GEMINI_API_KEY length:", apiKey ? apiKey.length : 0);
     console.log("GEMINI_API_KEY prefix:", apiKey ? apiKey.substring(0, 8) : "undefined");
 
