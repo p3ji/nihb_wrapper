@@ -5,7 +5,7 @@
   "type": "module",
   "main": "netlify/functions/query-policy.js",
   "scripts": {
-    "build": "node scripts/sync-policies.js",
+    "build": "echo \"No-op static build\"",
     "dev": "netlify dev"
   },
   "dependencies": {

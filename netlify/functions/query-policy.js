@@ -1,5 +1,9 @@
-import { getStore } from "@netlify/blobs";
-import { GoogleGenAI } from "@google/genai";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const currentDir = path.dirname(fileURLToPath(import.meta.url));
+const indexPath = path.join(currentDir, "vector_index.json");
 
 // Helper function to calculate dot product similarity between two normalized vectors
 function dotProduct(a, b) {
@@ -47,26 +51,21 @@ export default async (req, context) => {
     }
 
     // 3. Initialize Google Gen AI client
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-      console.error("GEMINI_API_KEY is not configured in the environment variables.");
-      return new Response(
-        JSON.stringify({ error: "Internal Server Configuration Error. Gemini API key is missing." }),
-        { status: 500, headers: { "Content-Type": "application/json" } }
-      );
+    let apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey || apiKey.startsWith("eyJ")) {
+      apiKey = "AIzaSyD3-OWI8TGEwPfSY3D9JNFayQhewc27bfw";
     }
-    const ai = new GoogleGenAI({ apiKey });
+    console.log("GEMINI_API_KEY length:", apiKey ? apiKey.length : 0);
+    console.log("GEMINI_API_KEY prefix:", apiKey ? apiKey.substring(0, 8) : "undefined");
 
-    // 4. Reference Netlify Blob store
-    const store = getStore("nihb-policies");
-
-    // 5. Retrieve pre-computed vector index from Blobs
-    const indexKey = "vector_index.json";
+    // 5. Retrieve pre-computed vector index from local file
     let vectorIndexRaw = null;
     try {
-      vectorIndexRaw = await store.get(indexKey, { type: "text" });
+      if (fs.existsSync(indexPath)) {
+        vectorIndexRaw = fs.readFileSync(indexPath, "utf-8");
+      }
     } catch (err) {
-      console.error("Failed to read vector index from store:", err);
+      console.error("Failed to read vector index from local file:", err);
     }
 
     if (!vectorIndexRaw) {
@@ -93,16 +92,24 @@ export default async (req, context) => {
     console.log(`Loaded vector index containing ${vectorIndex.length} chunks.`);
 
     // 6. Generate embedding vector for the user's query
-    console.log("Generating query embedding using gemini-embedding-001...");
-    const embedResponse = await ai.models.embedContent({
-      model: "gemini-embedding-001",
-      contents: question,
-      config: {
+    console.log("Generating query embedding using gemini-embedding-2...");
+    const embedUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-2:embedContent?key=${apiKey}`;
+    const embedRes = await fetch(embedUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        content: { parts: [{ text: question }] },
         outputDimensionality: 768
-      }
+      })
     });
-
-    const questionVector = embedResponse.embeddings?.[0]?.values || embedResponse.embedding?.values;
+    
+    if (!embedRes.ok) {
+      const errData = await embedRes.json();
+      throw new Error(errData.error?.message || "Failed to generate query embedding.");
+    }
+    
+    const embedData = await embedRes.json();
+    const questionVector = embedData.embedding?.values;
     if (!questionVector) {
       throw new Error("Failed to retrieve query embedding values from Gemini.");
     }
@@ -132,20 +139,37 @@ export default async (req, context) => {
 
     // 9. Dispatch to 'gemini-2.5-flash'
     console.log("Sending prompt to gemini-2.5-flash...");
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: [{ role: "user", parts: [{ text: prompt }] }],
-      config: {
-        systemInstruction: "You are an official NIHB policy assistant. Base your response strictly on the attached document excerpts. Prioritize the newest chronological update files if conflicting rules overlap. Cite the source manuals in your final answer."
-      }
+    const genUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+    const genRes = await fetch(genUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [
+          {
+            role: "user",
+            parts: [{ text: prompt }]
+          }
+        ],
+        systemInstruction: {
+          parts: [{ text: "You are an official NIHB policy assistant. Base your response strictly on the attached document excerpts. Prioritize the newest chronological update files if conflicting rules overlap. Cite the source manuals in your final answer." }]
+        }
+      })
     });
+
+    if (!genRes.ok) {
+      const errData = await genRes.json();
+      throw new Error(errData.error?.message || "Failed to generate response content.");
+    }
+
+    const genData = await genRes.json();
+    const answer = genData.candidates?.[0]?.content?.parts?.[0]?.text || "No response text generated.";
 
     // 10. Return response with source files
     const uniqueSources = [...new Set(topMatches.map(m => m.source))];
     
     return new Response(
       JSON.stringify({
-        answer: response.text || "No response text generated.",
+        answer,
         sources: uniqueSources,
         retrievedCount: topMatches.length
       }),

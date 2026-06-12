@@ -30,3 +30,6 @@ logs/
 # OS files
 .DS_Store
 Thumbs.db
+
+# Caches
+.cache/
